@@ -1,24 +1,6 @@
 import './style.css'
 import { initChatbot, sendMessage } from './chatbot.js'
 
-document.querySelector('#app').innerHTML = `
-  <div class="chatbot-container">
-    <div class="chatbot-header">
-      <h1>🗺️ 유럽여행 계획 챗봇</h1>
-      <p>여행 계획을 세우고 예산을 알아보세요!</p>
-    </div>
-    <div class="chatbot-messages" id="messages"></div>
-    <div class="chatbot-input-container">
-      <input 
-        type="text" 
-        id="userInput" 
-        placeholder="메시지를 입력하세요..." 
-        autocomplete="off"
-      />
-      <button id="sendButton">전송</button>
-    </div>
-  </div>
-`
 
 // 챗봇 초기화
 initChatbot();
