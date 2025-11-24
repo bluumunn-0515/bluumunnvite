@@ -1,12 +1,12 @@
 // Google Form 제출 URL 및 필드 매핑
 const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/1b8bZGIoIQxXowWybfyNmDdc3ZIruS-7D65LdnkiFt7Y/formResponse';
 const FORM_FIELDS = {
-  name: 'entry.1595024416',
-  country: 'entry.436238574',
-  travelDate: 'entry.172834959_sentinel',
-  travelType: 'entry.1461849951_sentinel',
-  companions: 'entry.1803840397_sentinel',
-  desires: 'entry.2139528715'
+  studentName: 'entry.1595024416',
+  vehicleInfo: 'entry.436238574',
+  symptomDescription: 'entry.172834959',
+  diagnosticReport: 'entry.1461849951',
+  researchNotes: 'entry.1803840397',
+  evaluation: 'entry.2139528715'
 };
 
 // 챗봇 상태 관리
@@ -14,15 +14,15 @@ class TravelChatbot {
   constructor() {
     this.conversationHistory = [];
     this.userData = {
-      name: '',
-      country: '',
-      travelDate: '',
-      travelType: '',
-      companions: '',
-      desires: ''
+      studentName: '',
+      vehicleInfo: '',
+      symptomDescription: '',
+      researchNotes: ''
     };
     this.currentQuestion = null;
     this.apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    this.diagnosticReport = '';
+    this.finalEvaluation = '';
     
     if (!this.apiKey) {
       console.error('API Key가 설정되지 않았습니다. .env 파일에 VITE_OPENAI_API_KEY를 설정해주세요.');
@@ -31,9 +31,9 @@ class TravelChatbot {
 
   // 챗봇 초기화
   async init() {
-    this.addMessage('bot', '안녕하세요! 유럽여행 계획을 도와드리는 챗봇입니다. 🗺️');
+    this.addMessage('bot', '안녕하세요! 자동차 이상 증상 진단 실습을 도와드릴 AI 조교입니다. 🔧');
     await this.delay(1000);
-    this.askQuestion('name', '먼저 이름을 알려주세요.');
+    this.askQuestion('studentName', '먼저 실습에 참여하는 학생의 이름 또는 학번을 입력해주세요.');
   }
 
   // 질문하기
@@ -52,55 +52,56 @@ class TravelChatbot {
     }
 
     // 현재 질문에 대한 답변 저장
-    this.userData[this.currentQuestion] = message;
+    const questionKey = this.currentQuestion;
+    this.userData[questionKey] = message;
     this.conversationHistory.push({
       role: 'user',
       content: message
     });
 
-    // 다음 질문으로 진행
     await this.delay(500);
+
+    if (questionKey === 'symptomDescription') {
+      await this.generateDiagnosticReport();
+      return;
+    }
+
+    if (questionKey === 'researchNotes') {
+      await this.evaluateStudentActions();
+      return;
+    }
+
     await this.moveToNextQuestion();
   }
 
   // 다음 질문으로 이동
   async moveToNextQuestion() {
-    if (!this.userData.name) {
-      this.askQuestion('name', '이름을 알려주세요.');
-    } else if (!this.userData.country) {
-      this.askQuestion('country', `${this.userData.name}님, 유럽의 어느 나라로 여행가고 싶으신가요?`);
-    } else if (!this.userData.travelDate) {
-      this.askQuestion('travelDate', '언제 여행가면 좋을 것 같으신가요? (예: 2024년 6월, 여름 등)');
-    } else if (!this.userData.travelType) {
-      this.askQuestion('travelType', '여행 유형은 어떤 방법을 생각하고 계신가요? (예: 자유여행, 패키지여행, 배낭여행 등)');
-    } else if (!this.userData.companions) {
-      this.askQuestion('companions', '여행의 구성원은 어떻게 될 예정인가요? (예: 혼자, 친구와, 가족과 등)');
-    } else if (!this.userData.desires) {
-      this.askQuestion('desires', '유럽여행을 하면서 바라는 점이나 이루었으면 하는 점이 있나요?');
-    } else {
-      // 모든 질문 완료 - GPT를 통한 여행 계획 생성
-      await this.generateTravelPlan();
+    if (!this.userData.studentName) {
+      this.askQuestion('studentName', '먼저 실습에 참여하는 학생의 이름 또는 학번을 입력해주세요.');
+    } else if (!this.userData.vehicleInfo) {
+      this.askQuestion('vehicleInfo', `${this.userData.studentName} 님, 차량 모델과 연식을 알려주세요.`);
+    } else if (!this.userData.symptomDescription) {
+      this.askQuestion('symptomDescription', '차량에서 감지된 이상 증상과 경고등, 주행 상황 등을 가능한 한 구체적으로 작성해주세요.');
     }
   }
 
-  // GPT API를 통한 여행 계획 생성
-  async generateTravelPlan() {
-    this.addMessage('bot', '정보를 바탕으로 여행 계획을 만들어드리겠습니다. 잠시만 기다려주세요...');
+  // AI 진단 리포트 생성
+  async generateDiagnosticReport() {
+    this.addMessage('bot', '입력된 증상을 분석하여 AI 진단 리포트를 작성 중입니다. 잠시만 기다려주세요...');
     
-    const prompt = `다음은 유럽여행 계획을 세우려는 사용자의 정보입니다:
-- 이름: ${this.userData.name}
-- 여행 국가: ${this.userData.country}
-- 여행 시기: ${this.userData.travelDate}
-- 여행 유형: ${this.userData.travelType}
-- 구성원: ${this.userData.companions}
-- 바라는 점: ${this.userData.desires}
+    const prompt = `자동차 실습 학생의 입력 정보를 바탕으로 고장 진단 리포트를 작성하세요.
+학생 이름: ${this.userData.studentName}
+차량 정보: ${this.userData.vehicleInfo}
+학생이 보고한 이상 증상: ${this.userData.symptomDescription}
 
-이 정보를 바탕으로:
-1. 추천 여행 코스를 구체적으로 제안해주세요 (3-5일 기준)
-2. 예상 여행 경비를 항목별로 자세히 알려주세요
-3. 추가 팁이나 주의사항을 제공해주세요
+아래 형식을 지켜주세요.
+<AI 진단 리포트>
+1) 의심되는 고장 원인 (최대 3개, 우선순위 포함)
+2) 권장 점검 항목 (센서, 배선, 기계 부품 등)
+3) 필요한 측정 장비/예비 부품
+4) 추가 관찰/데이터 수집 가이드
 
-친절하고 구체적으로 답변해주세요.`;
+전문적인 정비 용어를 사용하되 학생이 이해할 수 있도록 간결하게 작성하세요.`;
 
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -114,7 +115,7 @@ class TravelChatbot {
           messages: [
             {
               role: 'system',
-              content: '당신은 유럽여행 전문 상담사입니다. 친절하고 구체적인 여행 계획과 예산 정보를 제공합니다.'
+              content: '당신은 자동차 정비 교육을 돕는 전문 AI 진단사입니다. 입력된 증상을 바탕으로 체계적인 고장 진단 리포트를 작성하세요.'
             },
             {
               role: 'user',
@@ -131,31 +132,87 @@ class TravelChatbot {
       }
 
       const data = await response.json();
-      const travelPlan = data.choices[0].message.content;
-      
-      this.addMessage('bot', travelPlan);
-      
-      // Google Form에 데이터 제출
-      await this.submitToGoogleForm();
-      
-      this.addMessage('bot', '설문조사가 완료되었습니다. 즐거운 여행되세요! ✈️');
-      
+      const diagnosticReport = data.choices[0].message.content;
+      this.diagnosticReport = diagnosticReport;
+      this.addMessage('bot', diagnosticReport);
+      await this.delay(1000);
+      this.askQuestion(
+        'researchNotes',
+        'AI 진단 리포트를 참고하여 필요한 정비 및 조치사항을 조사한 뒤, 실행 계획 또는 예상 절차를 작성해 제출해주세요.'
+      );
     } catch (error) {
       console.error('Error calling OpenAI API:', error);
-      this.addMessage('bot', '죄송합니다. 여행 계획을 생성하는 중 오류가 발생했습니다. 다시 시도해주세요.');
+      this.addMessage('bot', '죄송합니다. 진단 리포트를 생성하는 중 오류가 발생했습니다. 다시 시도해주세요.');
+    }
+  }
+
+  // 학생 조사 내용을 평가
+  async evaluateStudentActions() {
+    this.addMessage('bot', '제출된 정비 및 조치사항을 분석하여 학습 이해도를 평가하는 중입니다...');
+
+    const prompt = `다음은 자동차 실습 수업 중 AI가 생성한 진단 리포트와 학생이 조사한 정비/조치 보고서입니다.
+
+<AI 진단 리포트>
+${this.diagnosticReport}
+
+<학생 조사 보고서>
+${this.userData.researchNotes}
+
+학생 보고서가 제안된 고장 원인과 정비 조치에 얼마나 부합하는지 0~100점으로 평가하고,
+1) 강점
+2) 보완할 점
+3) 이번 수업 학습 목표 달성도
+를 순서대로 작성하세요. 마지막에 "최종 점수: OO점" 형태로 점수를 명시하세요.`;
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            {
+              role: 'system',
+              content: '당신은 자동차 정비 실습을 지도하는 강사입니다. 학생 보고서를 평가하고 구체적인 피드백과 점수를 제공합니다.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const evaluation = data.choices[0].message.content;
+      this.finalEvaluation = evaluation;
+      this.addMessage('bot', evaluation);
+
+      await this.submitToGoogleForm();
+      this.addMessage('bot', '모든 단계가 완료되었습니다. 수고하셨습니다! ✅');
+      this.currentQuestion = null;
+    } catch (error) {
+      console.error('Error calling OpenAI API:', error);
+      this.addMessage('bot', '죄송합니다. 평가를 생성하는 중 오류가 발생했습니다. 다시 시도해주세요.');
     }
   }
 
   // Google Form에 데이터 제출
   submitToGoogleForm() {
     // Google Form은 sentinel 필드에서 "_sentinel"을 제거해야 합니다
-    const formFields = {
-      name: FORM_FIELDS.name,
-      country: FORM_FIELDS.country,
-      travelDate: FORM_FIELDS.travelDate.replace('_sentinel', ''),
-      travelType: FORM_FIELDS.travelType.replace('_sentinel', ''),
-      companions: FORM_FIELDS.companions.replace('_sentinel', ''),
-      desires: FORM_FIELDS.desires
+    const payload = {
+      ...this.userData,
+      diagnosticReport: this.diagnosticReport,
+      evaluation: this.finalEvaluation
     };
 
     // Hidden iframe을 사용하여 Google Form 제출 (CORS 우회)
@@ -172,11 +229,11 @@ class TravelChatbot {
     form.style.display = 'none';
 
     // 각 필드에 대한 input 요소 생성
-    Object.keys(formFields).forEach(key => {
+    Object.keys(FORM_FIELDS).forEach(key => {
       const input = document.createElement('input');
       input.type = 'hidden';
-      input.name = formFields[key];
-      input.value = this.userData[key] || '';
+      input.name = FORM_FIELDS[key];
+      input.value = payload[key] || '';
       form.appendChild(input);
     });
 
