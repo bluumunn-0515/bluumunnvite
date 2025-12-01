@@ -1,288 +1,312 @@
-// Google Form 제출 URL 및 필드 매핑
-const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/1b8bZGIoIQxXowWybfyNmDdc3ZIruS-7D65LdnkiFt7Y/formResponse';
-const FORM_FIELDS = {
-  studentName: 'entry.1595024416',
-  vehicleInfo: 'entry.436238574',
-  symptomDescription: 'entry.172834959',
-  diagnosticReport: 'entry.1461849951',
-  researchNotes: 'entry.1803840397',
-  evaluation: 'entry.2139528715'
+/**
+ * 🚗 Car Doctor AI - Logic Script
+ * * 기능:
+ * 1. OpenAI GPT API를 활용한 자동차 증상 진단 (원인 분석)
+ * 2. 학생의 정비 계획에 대한 AI 평가 및 피드백
+ * 3. 학습 결과(이름, 증상, 진단, 계획, 평가)를 Google Form으로 자동 제출
+ */
+
+// ============================================================
+// [설정 영역] 사용자의 환경에 맞게 값을 수정하세요.
+// ============================================================
+const CONFIG = {
+  // 1. OpenAI API 설정
+  API_KEY: import.meta.env.VITE_OPENAI_API_KEY,
+  MODEL: "gpt-4o-mini", // 비용 효율적인 모델 사용
+
+  // 2. Google Form 설정 (전송용 URL)
+  // 구글 폼의 '미리보기' 주소가 아니라, 'formResponse'로 끝나는 주소여야 합니다.
+  FORM_URL: "https://docs.google.com/forms/d/1lDx6j5e0ry8142qFv1Iu7g6dWfhVkhM9smlt-ROrPkM/formResponse",
+  
+  // 3. Google Form 필드 ID (Entry ID)
+  // 개발자 도구(F12)나 'Get pre-filled link' 기능을 통해 알아낸 ID를 매핑합니다.
+  ENTRIES: {
+      NAME: "entry.213299945",      // 학번/이름
+      SYMPTOM: "entry.313847425",   // 증상
+      DIAGNOSIS: "entry.2030957689", // AI 진단 결과
+      PLAN: "entry.907919031",      // 학생 정비 계획
+      EVALUATION: "entry.833948221" // AI 최종 평가
+  }
 };
 
-// 챗봇 상태 관리
-class TravelChatbot {
-  constructor() {
-    this.conversationHistory = [];
-    this.userData = {
-      studentName: '',
-      vehicleInfo: '',
-      symptomDescription: '',
-      researchNotes: ''
-    };
-    this.currentQuestion = null;
-    this.apiKey = import.meta.env.VITE_OPENAI_API_KEY;
-    this.diagnosticReport = '';
-    this.finalEvaluation = '';
-    
-    if (!this.apiKey) {
-      console.error('API Key가 설정되지 않았습니다. .env 파일에 VITE_OPENAI_API_KEY를 설정해주세요.');
-    }
-  }
+// ============================================================
+// [상태 관리] 현재 학습 세션의 데이터를 저장
+// ============================================================
+let sessionState = {
+  name: "",
+  symptom: "",
+  aiDiagnosis: "", // 1단계 결과 저장
+  studentPlan: "",
+  aiEvaluation: "" // 2단계 결과 저장
+};
 
-  // 챗봇 초기화
-  async init() {
-    this.addMessage('bot', '안녕하세요! 자동차 이상 증상 진단 실습을 도와드릴 AI 조교입니다. 🔧');
-    await this.delay(1000);
-    this.askQuestion('studentName', '먼저 실습에 참여하는 학생의 이름 또는 학번을 입력해주세요.');
-  }
 
-  // 질문하기
-  askQuestion(field, question) {
-    this.currentQuestion = field;
-    this.addMessage('bot', question);
-  }
+// ============================================================
+// [기능 1] 증상 분석 요청 (Step 1 -> Step 2)
+// ============================================================
+async function analyzeSymptom() {
+  // 1. 입력값 가져오기
+  const nameInput = document.getElementById('studentName');
+  const symptomInput = document.getElementById('carSymptom');
+  
+  const name = nameInput.value.trim();
+  const symptom = symptomInput.value.trim();
 
-  // 사용자 메시지 처리
-  async handleUserMessage(message) {
-    this.addMessage('user', message);
-    
-    if (!this.currentQuestion) {
-      this.addMessage('bot', '질문에 답변해주세요.');
+  // 2. 유효성 검사
+  if (!name || !symptom) {
+      showToast("학번/이름과 증상을 모두 입력해주세요!");
       return;
-    }
-
-    // 현재 질문에 대한 답변 저장
-    const questionKey = this.currentQuestion;
-    this.userData[questionKey] = message;
-    this.conversationHistory.push({
-      role: 'user',
-      content: message
-    });
-
-    await this.delay(500);
-
-    if (questionKey === 'symptomDescription') {
-      await this.generateDiagnosticReport();
-      return;
-    }
-
-    if (questionKey === 'researchNotes') {
-      await this.evaluateStudentActions();
-      return;
-    }
-
-    await this.moveToNextQuestion();
   }
 
-  // 다음 질문으로 이동
-  async moveToNextQuestion() {
-    if (!this.userData.studentName) {
-      this.askQuestion('studentName', '먼저 실습에 참여하는 학생의 이름 또는 학번을 입력해주세요.');
-    } else if (!this.userData.vehicleInfo) {
-      this.askQuestion('vehicleInfo', `${this.userData.studentName} 님, 차량 모델과 연식을 알려주세요.`);
-    } else if (!this.userData.symptomDescription) {
-      this.askQuestion('symptomDescription', '차량에서 감지된 이상 증상과 경고등, 주행 상황 등을 가능한 한 구체적으로 작성해주세요.');
-    }
-  }
+  // 상태 저장
+  sessionState.name = name;
+  sessionState.symptom = symptom;
 
-  // AI 진단 리포트 생성
-  async generateDiagnosticReport() {
-    this.addMessage('bot', '입력된 증상을 분석하여 AI 진단 리포트를 작성 중입니다. 잠시만 기다려주세요...');
-    
-    const prompt = `자동차 실습 학생의 입력 정보를 바탕으로 고장 진단 리포트를 작성하세요.
-학생 이름: ${this.userData.studentName}
-차량 정보: ${this.userData.vehicleInfo}
-학생이 보고한 이상 증상: ${this.userData.symptomDescription}
+  // UI 업데이트 (로딩 시작)
+  const loader = document.getElementById('loader1');
+  const resultSection = document.getElementById('step2');
+  const inputSection = document.getElementById('step3');
+  const outputDiv = document.getElementById('aiDiagnosisOutput');
 
-아래 형식을 지켜주세요.
-<AI 진단 리포트>
-1) 의심되는 고장 원인 (최대 3개, 우선순위 포함)
-2) 권장 점검 항목 (센서, 배선, 기계 부품 등)
-3) 필요한 측정 장비/예비 부품
-4) 추가 관찰/데이터 수집 가이드
+  loader.style.display = 'block';
+  
+  // 3. API 호출 (API 키가 없으면 데모 모드 실행)
+  if (!CONFIG.API_KEY) {
+      console.warn("API Key가 없습니다. 데모 모드로 실행됩니다.");
+      await runDemoMode('diagnosis', outputDiv);
+  } else {
+      try {
+          const response = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${CONFIG.API_KEY}`
+              },
+              body: JSON.stringify({
+                  model: CONFIG.MODEL,
+                  messages: [
+                      {
+                          role: "system",
+                          content: `당신은 자동차 정비 교사입니다. 
+                          학생이 증상을 말하면 다음 형식으로 답변하세요:
+                          1. 예상되는 기술적 원인 (2~3가지)
+                          2. 점검해야 할 부품 및 위치
+                          
+                          [중요 규칙]
+                          - 구체적인 수리 방법(교체 순서, 공구 사용법 등)은 절대 알려주지 마세요.
+                          - 학생이 스스로 정비 지침서를 찾아보도록 유도하는 것이 목표입니다.
+                          - 전문 용어를 사용하되, 고등학생 수준에 맞춰 설명하세요.`
+                      },
+                      { role: "user", content: symptom }
+                  ],
+                  temperature: 0.7
+              })
+          });
 
-전문적인 정비 용어를 사용하되 학생이 이해할 수 있도록 간결하게 작성하세요.`;
+          const data = await response.json();
+          
+          if (data.error) throw new Error(data.error.message);
+          
+          const aiText = data.choices[0].message.content;
+          sessionState.aiDiagnosis = aiText; // 결과 저장
+          outputDiv.innerText = aiText;
 
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: '당신은 자동차 정비 교육을 돕는 전문 AI 진단사입니다. 입력된 증상을 바탕으로 체계적인 고장 진단 리포트를 작성하세요.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 1000
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+      } catch (error) {
+          console.error("API Error:", error);
+          showToast("AI 분석 중 오류가 발생했습니다.");
+          outputDiv.innerText = "오류 발생: " + error.message;
+          // 실패 시 데모 데이터라도 보여주려면 아래 주석 해제
+          // await runDemoMode('diagnosis', outputDiv);
       }
-
-      const data = await response.json();
-      const diagnosticReport = data.choices[0].message.content;
-      this.diagnosticReport = diagnosticReport;
-      this.addMessage('bot', diagnosticReport);
-      await this.delay(1000);
-      this.askQuestion(
-        'researchNotes',
-        'AI 진단 리포트를 참고하여 필요한 정비 및 조치사항을 조사한 뒤, 실행 계획 또는 예상 절차를 작성해 제출해주세요.'
-      );
-    } catch (error) {
-      console.error('Error calling OpenAI API:', error);
-      this.addMessage('bot', '죄송합니다. 진단 리포트를 생성하는 중 오류가 발생했습니다. 다시 시도해주세요.');
-    }
   }
 
-  // 학생 조사 내용을 평가
-  async evaluateStudentActions() {
-    this.addMessage('bot', '제출된 정비 및 조치사항을 분석하여 학습 이해도를 평가하는 중입니다...');
+  // 4. UI 업데이트 (결과 표시)
+  loader.style.display = 'none';
+  showSection('step2');
+  showSection('step3');
+  
+  // 다음 단계를 위해 스크롤 이동
+  setTimeout(() => {
+      resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+}
 
-    const prompt = `다음은 자동차 실습 수업 중 AI가 생성한 진단 리포트와 학생이 조사한 정비/조치 보고서입니다.
 
-<AI 진단 리포트>
-${this.diagnosticReport}
+// ============================================================
+// [기능 2] 학생 계획 평가 및 제출 (Step 3 -> Step 4)
+// ============================================================
+async function evaluateStudent() {
+  // 1. 입력값 가져오기
+  const planInput = document.getElementById('studentActionPlan');
+  const plan = planInput.value.trim();
 
-<학생 조사 보고서>
-${this.userData.researchNotes}
+  if (!plan) {
+      showToast("정비 계획을 작성해주세요!");
+      return;
+  }
 
-학생 보고서가 제안된 고장 원인과 정비 조치에 얼마나 부합하는지 0~100점으로 평가하고,
-1) 강점
-2) 보완할 점
-3) 이번 수업 학습 목표 달성도
-를 순서대로 작성하세요. 마지막에 "최종 점수: OO점" 형태로 점수를 명시하세요.`;
+  sessionState.studentPlan = plan;
 
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            {
-              role: 'system',
-              content: '당신은 자동차 정비 실습을 지도하는 강사입니다. 학생 보고서를 평가하고 구체적인 피드백과 점수를 제공합니다.'
-            },
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          temperature: 0.7,
-          max_tokens: 1000
-        })
-      });
+  // UI 업데이트
+  const loader = document.getElementById('loader2');
+  const resultDiv = document.getElementById('evaluationResult');
+  const finalSection = document.getElementById('step4');
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+  loader.style.display = 'block';
+
+  // 2. API 호출 (평가)
+  let evaluationText = "";
+
+  if (!CONFIG.API_KEY) {
+      await runDemoMode('evaluation', resultDiv);
+      evaluationText = resultDiv.innerText; // 데모 텍스트 가져오기
+  } else {
+      try {
+          const response = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${CONFIG.API_KEY}`
+              },
+              body: JSON.stringify({
+                  model: CONFIG.MODEL,
+                  messages: [
+                      {
+                          role: "system",
+                          content: `당신은 자동차 정비 실습 평가관입니다.
+                          학생의 [정비 계획]이 앞서 진단된 [증상]과 [원인]을 해결하기에 적절한지 평가하세요.
+                          
+                          [출력 형식]
+                          1. 평가 등급: (S/A/B/C/F 중 하나)
+                          2. 잘한 점: (구체적으로)
+                          3. 보완할 점: (안전 수칙, 누락된 점검 사항 등 피드백)
+                          4. 총평: (한 줄 요약)`
+                      },
+                      { 
+                          role: "user", 
+                          content: `
+                          [상황 정보]
+                          - 증상: ${sessionState.symptom}
+                          - AI 진단 원인: ${sessionState.aiDiagnosis}
+                          
+                          [학생 답안]
+                          - 정비 계획: ${plan}
+                          
+                          위 내용을 바탕으로 평가해주세요.` 
+                      }
+                  ],
+                  temperature: 0.7
+              })
+          });
+
+          const data = await response.json();
+          if (data.error) throw new Error(data.error.message);
+
+          evaluationText = data.choices[0].message.content;
+          sessionState.aiEvaluation = evaluationText;
+          resultDiv.innerText = evaluationText;
+
+      } catch (error) {
+          console.error("Evaluation Error:", error);
+          showToast("평가 중 오류가 발생했습니다.");
+          resultDiv.innerText = "평가 실패: " + error.message;
+          loader.style.display = 'none';
+          return;
       }
-
-      const data = await response.json();
-      const evaluation = data.choices[0].message.content;
-      this.finalEvaluation = evaluation;
-      this.addMessage('bot', evaluation);
-
-      await this.submitToGoogleForm();
-      this.addMessage('bot', '모든 단계가 완료되었습니다. 수고하셨습니다! ✅');
-      this.currentQuestion = null;
-    } catch (error) {
-      console.error('Error calling OpenAI API:', error);
-      this.addMessage('bot', '죄송합니다. 평가를 생성하는 중 오류가 발생했습니다. 다시 시도해주세요.');
-    }
   }
 
-  // Google Form에 데이터 제출
-  submitToGoogleForm() {
-    // Google Form은 sentinel 필드에서 "_sentinel"을 제거해야 합니다
-    const payload = {
-      ...this.userData,
-      diagnosticReport: this.diagnosticReport,
-      evaluation: this.finalEvaluation
-    };
+  // 3. Google Form으로 데이터 전송 (백그라운드)
+  // 평가가 완료된 후 전송해야 모든 데이터가 포함됨
+  submitToGoogleForm();
 
-    // Hidden iframe을 사용하여 Google Form 제출 (CORS 우회)
-    const iframe = document.createElement('iframe');
-    iframe.name = 'hidden_iframe';
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
+  // 4. UI 업데이트
+  loader.style.display = 'none';
+  showSection('step4');
+  
+  setTimeout(() => {
+      finalSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
+}
 
-    // Form 생성 및 제출
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = GOOGLE_FORM_URL;
-    form.target = 'hidden_iframe';
-    form.style.display = 'none';
 
-    // 각 필드에 대한 input 요소 생성
-    Object.keys(FORM_FIELDS).forEach(key => {
-      const input = document.createElement('input');
-      input.type = 'hidden';
-      input.name = FORM_FIELDS[key];
-      input.value = payload[key] || '';
-      form.appendChild(input);
-    });
-
-    document.body.appendChild(form);
-    form.submit();
-
-    // 정리
-    setTimeout(() => {
-      document.body.removeChild(form);
-      document.body.removeChild(iframe);
-    }, 2000);
-
-    console.log('Google Form 제출 완료');
+// ============================================================
+// [기능 3] Google Form 전송 로직
+// ============================================================
+function submitToGoogleForm() {
+  // 폼 URL이 설정되지 않았으면 건너뜀
+  if (CONFIG.FORM_URL.includes("YOUR_FORM_ID")) {
+      console.log("Google Form URL 미설정으로 전송 생략");
+      return;
   }
 
-  // 메시지 추가
-  addMessage(sender, text) {
-    const messagesContainer = document.getElementById('messages');
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}`;
-    
-    const messageContent = document.createElement('div');
-    messageContent.className = 'message-content';
-    messageContent.textContent = text;
-    
-    messageDiv.appendChild(messageContent);
-    messagesContainer.appendChild(messageDiv);
-    
-    // 스크롤을 맨 아래로
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  }
+  const formData = new FormData();
+  formData.append(CONFIG.ENTRIES.NAME, sessionState.name);
+  formData.append(CONFIG.ENTRIES.SYMPTOM, sessionState.symptom);
+  formData.append(CONFIG.ENTRIES.DIAGNOSIS, sessionState.aiDiagnosis);
+  formData.append(CONFIG.ENTRIES.PLAN, sessionState.studentPlan);
+  formData.append(CONFIG.ENTRIES.EVALUATION, sessionState.aiEvaluation);
 
-  // 딜레이 함수
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+  // fetch using 'no-cors' mode
+  fetch(CONFIG.FORM_URL, {
+      method: "POST",
+      mode: "no-cors", 
+      body: formData
+  })
+  .then(() => {
+      showToast("✅ 학습 결과가 선생님께 제출되었습니다!");
+      console.log("Form submitted successfully");
+  })
+  .catch((err) => {
+      console.error("Form submission failed:", err);
+      showToast("⚠️ 결과 제출에 실패했습니다.");
+  });
+}
+
+
+// ============================================================
+// [유틸리티] UI 헬퍼 함수들
+// ============================================================
+
+// 섹션 표시 애니메이션
+function showSection(id) {
+  const el = document.getElementById(id);
+  if(el) {
+      el.classList.remove('hidden');
+      // 브라우저 렌더링 타이밍을 위해 약간 지연
+      setTimeout(() => {
+          el.classList.add('step-visible');
+      }, 50);
   }
 }
 
-// 챗봇 인스턴스 생성 및 초기화
-let chatbot;
-
-export function initChatbot() {
-  chatbot = new TravelChatbot();
-  chatbot.init();
-}
-
-export function sendMessage(message) {
-  if (chatbot) {
-    chatbot.handleUserMessage(message);
+// 토스트 메시지
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  if(toast) {
+      toast.innerText = msg;
+      toast.classList.remove('opacity-0');
+      setTimeout(() => {
+          toast.classList.add('opacity-0');
+      }, 3000);
   }
 }
 
+// 데모 모드 (API 키 없을 때 테스트용)
+function runDemoMode(type, element) {
+  return new Promise(resolve => {
+      setTimeout(() => {
+          if (type === 'diagnosis') {
+              const demoText = `[데모 모드]\n1. 예상 원인: 브레이크 패드 마모 또는 디스크 변형\n2. 점검 위치: 캘리퍼 및 로터 상태 확인 필요.`;
+              element.innerText = demoText;
+              sessionState.aiDiagnosis = demoText;
+          } else if (type === 'evaluation') {
+              const demoEval = `[데모 평가]\n1. 평가 등급: B\n2. 잘한 점: 패드 교체 절차를 잘 알고 있음.\n3. 보완할 점: 안전 장구 착용 내용이 빠짐.\n4. 총평: 기본기가 탄탄함.`;
+              element.innerText = demoEval;
+              sessionState.aiEvaluation = demoEval;
+          }
+          resolve();
+      }, 1500); // 1.5초 딜레이 흉내
+  });
+}
+window.analyzeSymptom = analyzeSymptom;
+window.evaluateStudent = evaluateStudent;
