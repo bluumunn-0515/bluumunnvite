@@ -45,25 +45,84 @@
 
     <header class="w-full max-w-2xl p-6 mb-6 text-center bg-gray-800 rounded-xl shadow-lg border-b-4 border-blue-600">
         <h1 class="text-3xl font-bold text-blue-400">🔧 Car Doctor AI</h1>
-        <p class="mt-2 text-sm text-gray-400">증상 진단부터 정비 계획까지, AI와 함께 학습해보세요.</p>
+        <p class="mt-2 text-sm text-gray-400">학생 정보 입력 ➔ 차량 정보 설정 ➔ 증상 진단 및 정비 계획</p>
     </header>
 
     <main class="w-full max-w-2xl space-y-6">
-        
+
         <section id="step1" class="p-6 bg-gray-800 rounded-xl shadow border border-gray-700">
             <div class="flex items-center mb-4">
-                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-white bg-blue-600 rounded-full">1</span>
-                <h2 class="text-xl font-bold text-white">증상 접수</h2>
+                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-white bg-gray-600 rounded-full">1</span>
+                <h2 class="text-xl font-bold text-white">학생 정보 입력</h2>
             </div>
             
             <div class="space-y-4">
                 <div>
                     <label class="block mb-1 text-sm text-gray-400">학번 / 이름</label>
-                    <input type="text" id="studentName" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none" placeholder="예: 30101 홍길동">
+                    <input type="text" id="studentName" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-gray-500 focus:outline-none" placeholder="예: 30101 홍길동">
                 </div>
+                
+                <button onclick="saveStudentInfo()" class="w-full py-3 font-bold text-white transition bg-gray-600 rounded hover:bg-gray-700">
+                    등록하고 시작하기 👉
+                </button>
+            </div>
+        </section>
+
+        <section id="step2" class="hidden p-6 bg-gray-800 rounded-xl shadow border border-purple-600/50 step-container">
+            <div class="flex items-center mb-4">
+                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-white bg-purple-600 rounded-full">2</span>
+                <h2 class="text-xl font-bold text-purple-100">차량 제원 설정</h2>
+            </div>
+            
+            <div class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block mb-1 text-sm text-gray-400">차종 선택</label>
+                        <select id="carType" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-purple-500 focus:outline-none">
+                            <option value="승용차">승용차 (Sedan/SUV)</option>
+                            <option value="화물차">화물차 (Truck)</option>
+                            <option value="대형버스">대형버스 (Bus)</option>
+                            <option value="특수차량">특수차량</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-sm text-gray-400">제조사 (브랜드)</label>
+                        <input type="text" id="carBrand" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-purple-500 focus:outline-none" placeholder="예: 현대, BMW">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block mb-1 text-sm text-gray-400">모델명</label>
+                        <input type="text" id="carModel" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-purple-500 focus:outline-none" placeholder="예: 아반떼 CN7">
+                    </div>
+                    <div>
+                        <label class="block mb-1 text-sm text-gray-400">배기량 (cc)</label>
+                        <input type="number" id="carEngine" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-purple-500 focus:outline-none" placeholder="예: 1600">
+                    </div>
+                </div>
+
                 <div>
-                    <label class="block mb-1 text-sm text-gray-400">차량 이상 증상</label>
-                    <textarea id="carSymptom" rows="3" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none" placeholder="예: 브레이크를 밟을 때 핸들이 심하게 떨려요."></textarea>
+                    <label class="block mb-1 text-sm text-gray-400">차량 특이사항 (튜닝, 노후화 등)</label>
+                    <input type="text" id="carRemark" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-purple-500 focus:outline-none" placeholder="예: 10년 이상 노후 차량, 터보 튜닝됨">
+                </div>
+                
+                <button onclick="saveVehicleSpecs()" class="w-full py-3 font-bold text-white transition bg-purple-600 rounded hover:bg-purple-700">
+                    차량 설정 완료 (다음) 👉
+                </button>
+            </div>
+        </section>
+        
+        <section id="step3" class="hidden p-6 bg-gray-800 rounded-xl shadow border border-blue-600/50 step-container">
+            <div class="flex items-center mb-4">
+                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-white bg-blue-600 rounded-full">3</span>
+                <h2 class="text-xl font-bold text-white">증상 접수</h2>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block mb-1 text-sm text-gray-400">차량 이상 증상 상세 설명</label>
+                    <textarea id="carSymptom" rows="3" class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none" placeholder="예: 브레이크를 밟을 때 핸들이 심하게 떨리고 끼익 소리가 나요."></textarea>
                 </div>
                 
                 <button onclick="analyzeSymptom()" class="w-full py-3 font-bold text-white transition bg-blue-600 rounded hover:bg-blue-700">
@@ -73,9 +132,9 @@
             </div>
         </section>
 
-        <section id="step2" class="hidden p-6 bg-gray-800 rounded-xl shadow border border-blue-500/50 step-container">
+        <section id="step4" class="hidden p-6 bg-gray-800 rounded-xl shadow border border-indigo-500/50 step-container">
             <div class="flex items-center mb-4">
-                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-white bg-indigo-600 rounded-full">2</span>
+                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-white bg-indigo-600 rounded-full">4</span>
                 <h2 class="text-xl font-bold text-indigo-300">AI 진단 리포트</h2>
             </div>
             <div class="p-4 mb-4 text-sm leading-relaxed text-gray-200 bg-gray-700/50 rounded-lg border-l-4 border-indigo-500">
@@ -85,9 +144,9 @@
             <p class="text-sm text-center text-gray-400">👇 위 원인을 해결하기 위한 정비 방법을 조사하여 아래에 적어주세요.</p>
         </section>
 
-        <section id="step3" class="hidden p-6 bg-gray-800 rounded-xl shadow border border-yellow-500/50 step-container">
+        <section id="step5" class="hidden p-6 bg-gray-800 rounded-xl shadow border border-yellow-500/50 step-container">
             <div class="flex items-center mb-4">
-                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-black bg-yellow-400 rounded-full">3</span>
+                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-black bg-yellow-400 rounded-full">5</span>
                 <h2 class="text-xl font-bold text-yellow-400">정비 및 조치사항 제출</h2>
             </div>
             <div class="space-y-4">
@@ -102,9 +161,9 @@
             </div>
         </section>
 
-        <section id="step4" class="hidden p-6 bg-gray-800 rounded-xl shadow border border-green-500 step-container">
+        <section id="step6" class="hidden p-6 bg-gray-800 rounded-xl shadow border border-green-500 step-container">
             <div class="flex items-center mb-4">
-                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-white bg-green-600 rounded-full">4</span>
+                <span class="flex items-center justify-center w-8 h-8 mr-3 font-bold text-white bg-green-600 rounded-full">6</span>
                 <h2 class="text-xl font-bold text-green-400">학습 평가 결과</h2>
             </div>
             <div id="evaluationResult" class="p-5 text-gray-100 bg-gray-900 rounded-lg border border-gray-700 whitespace-pre-wrap leading-relaxed"></div>
